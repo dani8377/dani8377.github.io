@@ -105,8 +105,6 @@ GEM
       google-protobuf (~> 4.30)
     sass-embedded (1.86.0-aarch64-linux-musl)
       google-protobuf (~> 4.30)
-    sass-embedded (1.86.0-aarch64-mingw-ucrt)
-      google-protobuf (~> 4.30)
     sass-embedded (1.86.0-arm-linux-androideabi)
       google-protobuf (~> 4.30)
     sass-embedded (1.86.0-arm-linux-gnueabihf)
@@ -139,7 +137,6 @@ PLATFORMS
   aarch64-linux-android
   aarch64-linux-gnu
   aarch64-linux-musl
-  aarch64-mingw-ucrt
   arm-linux-androideabi
   arm-linux-gnu
   arm-linux-gnueabihf
@@ -169,4 +166,4 @@ DEPENDENCIES
   wdm (~> 0.1)
 
 BUNDLED WITH
-   2.6.3
+   2.6.6
