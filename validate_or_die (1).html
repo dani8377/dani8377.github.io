@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Validate or Die — Startup Validation Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0d0f;
+    --surface: #16161a;
+    --card: #1e1e24;
+    --border: #2e2e38;
+    --text: #f0eee8;
+    --muted: #888880;
+    --accent: #c8f562;
+    --accent-dim: #2a3a10;
+    --danger: #f55c5c;
+    --danger-dim: #3a1010;
+    --info: #5c9cf5;
+    --info-dim: #0f1f3a;
+    --warn: #f5c35c;
+    --warn-dim: #3a2c0f;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+  #game-root { max-width: 780px; margin: 0 auto; padding: 24px 16px 48px; }
+
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  .game-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px; padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .game-title { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; }
+  .resources { display: flex; gap: 16px; }
+  .res-item { display: flex; flex-direction: column; align-items: flex-end; }
+  .res-label { font-size: 10px; color: var(--muted); font-family: var(--mono); letter-spacing: 0.08em; }
+  .res-val { font-size: 16px; font-weight: 600; font-family: var(--mono); }
+  .res-val.money { color: var(--accent); }
+  .res-val.time { color: var(--info); }
+
+  .traction-section { margin-bottom: 28px; }
+  .traction-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .traction-label { font-size: 11px; font-family: var(--mono); color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  .traction-score { font-size: 13px; font-family: var(--mono); color: var(--accent); }
+  .traction-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .traction-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.5s ease; }
+
+  .idea-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 20px; margin-bottom: 24px;
+  }
+  .idea-name { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .idea-desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .assumption-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .tag {
+    font-size: 11px; font-family: var(--mono); padding: 3px 8px;
+    border-radius: 4px; border: 1px solid;
+  }
+  .tag.unvalidated { background: var(--warn-dim); border-color: var(--warn); color: var(--warn); }
+  .tag.validated { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .tag.failed { background: var(--danger-dim); border-color: var(--danger); color: var(--danger); }
+
+  .round-label {
+    font-size: 11px; font-family: var(--mono); color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 16px;
+  }
+
+  .actions-title { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 24px; }
+  .action-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  }
+  .action-card:hover:not(.disabled) { border-color: var(--accent); background: #1e241a; }
+  .action-card.disabled { opacity: 0.4; cursor: not-allowed; }
+  .action-name { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+  .action-desc { font-size: 12px; color: var(--muted); line-height: 1.4; margin-bottom: 10px; }
+  .action-costs { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cost-badge {
+    font-size: 10px; font-family: var(--mono); padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .cost-money { background: var(--accent-dim); color: var(--accent); }
+  .cost-time { background: var(--info-dim); color: var(--info); }
+
+  .event-panel {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 20px; margin-bottom: 24px;
+    display: none;
+  }
+  .event-panel.show { display: block; }
+  .event-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .event-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .event-icon.good { background: var(--accent-dim); color: var(--accent); }
+  .event-icon.bad { background: var(--danger-dim); color: var(--danger); }
+  .event-icon.neutral { background: var(--info-dim); color: var(--info); }
+  .event-title { font-size: 14px; font-weight: 500; }
+  .event-body { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .event-delta { font-family: var(--mono); font-size: 13px; margin-top: 8px; }
+  .delta-pos { color: var(--accent); }
+  .delta-neg { color: var(--danger); }
+
+  .log-section { margin-top: 8px; }
+  .log-title { font-size: 11px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+  .log-list { display: flex; flex-direction: column; gap: 4px; max-height: 120px; overflow-y: auto; }
+  .log-entry { font-size: 12px; font-family: var(--mono); color: var(--muted); padding: 3px 0; border-bottom: 1px solid var(--border); }
+  .log-entry span { color: var(--text); }
+
+  .btn {
+    font-family: var(--mono); font-size: 12px; padding: 10px 20px;
+    border-radius: 6px; border: 1px solid; cursor: pointer;
+    letter-spacing: 0.05em; transition: all 0.15s;
+  }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #0d0d0f; font-weight: 700; }
+  .btn-primary:hover { background: #b4e04e; }
+  .btn-ghost { background: transparent; border-color: var(--border); color: var(--muted); }
+  .btn-ghost:hover { border-color: var(--text); color: var(--text); }
+
+  .end-title { font-size: 32px; font-weight: 700; margin-bottom: 8px; font-family: var(--mono); }
+  .end-subtitle { font-size: 14px; color: var(--muted); margin-bottom: 28px; line-height: 1.6; }
+  .end-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 28px; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; text-align: center; }
+  .stat-num { font-size: 26px; font-weight: 600; font-family: var(--mono); }
+  .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: var(--mono); letter-spacing: 0.06em; }
+  .lessons { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+  .lessons-title { font-size: 12px; font-family: var(--mono); color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px; }
+  .lesson-item { display: flex; gap: 10px; font-size: 13px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; }
+  .lesson-item::before { content: '→'; color: var(--accent); flex-shrink: 0; font-family: var(--mono); }
+
+  .intro-title { font-size: 36px; font-weight: 700; font-family: var(--mono); color: var(--accent); line-height: 1.1; margin-bottom: 16px; }
+  .intro-subtitle { font-size: 15px; color: var(--muted); line-height: 1.7; margin-bottom: 28px; }
+  .intro-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 28px; }
+  .intro-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .intro-card-title { font-size: 11px; font-family: var(--mono); color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4px; }
+  .intro-card-body { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .idea-select { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+  .idea-option {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; cursor: pointer; transition: all 0.15s;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .idea-option:hover { border-color: var(--accent); }
+  .idea-option.selected { border-color: var(--accent); background: #1e241a; }
+  .idea-option-name { font-weight: 500; font-size: 14px; }
+  .idea-option-tag { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+  .twist-overlay {
+    background: var(--card); border: 1px solid var(--warn);
+    border-radius: 10px; padding: 20px; margin-bottom: 20px;
+    display: none;
+  }
+  .twist-overlay.show { display: block; }
+  .twist-header { font-family: var(--mono); font-size: 11px; color: var(--warn); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+  .twist-body { font-size: 14px; margin-bottom: 14px; line-height: 1.5; }
+  .twist-effect { font-size: 12px; font-family: var(--mono); color: var(--warn); }
+
+  @media (max-width: 500px) {
+    .action-grid { grid-template-columns: 1fr; }
+    .intro-grid { grid-template-columns: 1fr; }
+    .end-stats { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div id="game-root">
+
+<!-- INTRO SCREEN -->
+<div class="screen active" id="screen-intro">
+  <div class="game-title" style="margin-bottom: 20px;">VALIDATE OR DIE</div>
+  <div class="intro-title">You have 8 weeks<br>and $40k.<br>Prove it works.</div>
+  <div class="intro-subtitle">Race to product-market fit before you run out of runway. Every experiment costs time and money — but so does building the wrong thing.</div>
+
+  <div class="intro-grid">
+    <div class="intro-card">
+      <div class="intro-card-title">Core loop</div>
+      <div class="intro-card-body">Each round: choose a validation action → spend resources → get market feedback → earn or lose traction.</div>
+    </div>
+    <div class="intro-card">
+      <div class="intro-card-title">Win condition</div>
+      <div class="intro-card-body">Reach 80 traction points within your budget and time limit. Failing teaches you what winning requires.</div>
+    </div>
+    <div class="intro-card">
+      <div class="intro-card-title">Feedback types</div>
+      <div class="intro-card-body"><b style="color:var(--text)">Immediate:</b> each action shows a customer reaction. <b style="color:var(--text)">Delayed:</b> ignored signals hurt you later.</div>
+    </div>
+    <div class="intro-card">
+      <div class="intro-card-title">Twists</div>
+      <div class="intro-card-body">Market shocks, competitor moves, and budget crunches arrive unexpectedly. Prioritize wisely.</div>
+    </div>
+  </div>
+
+  <div style="font-size: 12px; font-family: var(--mono); color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.08em;">Choose your startup idea</div>
+  <div class="idea-select" id="idea-select">
+    <div class="idea-option selected" data-id="0" onclick="selectIdea(0)">
+      <div>
+        <div class="idea-option-name">FreightFlow</div>
+        <div class="idea-option-tag" style="margin-top:3px; color:var(--muted); font-size:12px;">AI route optimizer for small trucking companies</div>
+      </div>
+      <div class="idea-option-tag">B2B / SaaS</div>
+    </div>
+    <div class="idea-option" data-id="1" onclick="selectIdea(1)">
+      <div>
+        <div class="idea-option-name">MoodMenu</div>
+        <div class="idea-option-tag" style="margin-top:3px; color:var(--muted); font-size:12px;">Restaurant app that suggests dishes based on your mood</div>
+      </div>
+      <div class="idea-option-tag">B2C / App</div>
+    </div>
+    <div class="idea-option" data-id="2" onclick="selectIdea(2)">
+      <div>
+        <div class="idea-option-name">CliniTrack</div>
+        <div class="idea-option-tag" style="margin-top:3px; color:var(--muted); font-size:12px;">Automated patient follow-up for private clinics</div>
+      </div>
+      <div class="idea-option-tag">B2B / Health</div>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" onclick="startGame()" style="width:100%">Start validation sprint →</button>
+</div>
+
+<!-- MAIN GAME SCREEN -->
+<div class="screen" id="screen-game">
+  <div class="game-header">
+    <div class="game-title" id="hdr-idea-name">FREIGHTFLOW</div>
+    <div class="resources">
+      <div class="res-item">
+        <div class="res-label">Budget</div>
+        <div class="res-val money" id="hdr-money">$40k</div>
+      </div>
+      <div class="res-item">
+        <div class="res-label">Weeks left</div>
+        <div class="res-val time" id="hdr-time">8</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="traction-section">
+    <div class="traction-header">
+      <div class="traction-label">Traction / Validation Score</div>
+      <div class="traction-score" id="traction-score-label">0 / 80</div>
+    </div>
+    <div style="position:relative;">
+      <div class="traction-track">
+        <div class="traction-fill" id="traction-fill" style="width:0%"></div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:4px;">
+      <div style="font-size:10px;color:var(--muted);font-family:var(--mono)">0</div>
+      <div style="font-size:10px;color:var(--warn);font-family:var(--mono)">target: 80</div>
+      <div style="font-size:10px;color:var(--muted);font-family:var(--mono)">100</div>
+    </div>
+  </div>
+
+  <div class="idea-card" id="idea-card">
+    <div class="idea-name" id="idea-card-name">FreightFlow</div>
+    <div class="idea-desc" id="idea-card-desc">AI route optimizer for small trucking companies. Core assumption: dispatchers spend 2+ hrs/day on manual routing.</div>
+    <div class="assumption-tags" id="assumption-tags"></div>
+  </div>
+
+  <div class="twist-overlay" id="twist-overlay">
+    <div class="twist-header">⚡ market event</div>
+    <div class="twist-body" id="twist-body"></div>
+    <div class="twist-effect" id="twist-effect"></div>
+  </div>
+
+  <div class="event-panel" id="event-panel">
+    <div class="event-header">
+      <div class="event-icon" id="event-icon">✓</div>
+      <div class="event-title" id="event-title">Customer interviews complete</div>
+    </div>
+    <div class="event-body" id="event-body"></div>
+    <div class="event-delta" id="event-delta"></div>
+  </div>
+
+  <div class="round-label" id="round-label">Round 1 of 6 — choose your next validation action</div>
+  <div class="actions-title">What do you test next?</div>
+  <div class="action-grid" id="action-grid"></div>
+
+  <div class="log-section">
+    <div class="log-title">Decision log</div>
+    <div class="log-list" id="log-list"></div>
+  </div>
+</div>
+
+<!-- END SCREEN -->
+<div class="screen" id="screen-end">
+  <div class="end-title" id="end-title">FUNDED.</div>
+  <div class="end-subtitle" id="end-subtitle"></div>
+  <div class="end-stats">
+    <div class="stat-card">
+      <div class="stat-num" id="stat-traction" style="color:var(--accent)">72</div>
+      <div class="stat-lbl">Final traction</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="stat-money" style="color:var(--info)">$8k</div>
+      <div class="stat-lbl">Budget left</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="stat-rounds" style="color:var(--warn)">5</div>
+      <div class="stat-lbl">Rounds played</div>
+    </div>
+  </div>
+  <div class="lessons" id="lessons-card">
+    <div class="lessons-title">What this run taught you</div>
+    <div id="lessons-list"></div>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
+    <button class="btn btn-primary" onclick="restartGame()" style="flex:1;min-width:200px">Try again with different strategy</button>
+  </div>
+</div>
+
+</div>
+
+<script>
+const IDEAS = [
+  {
+    id: 0,
+    name: "FreightFlow",
+    tagline: "B2B / SaaS",
+    desc: "AI route optimizer for small trucking companies. Core assumption: dispatchers spend 2+ hrs/day on manual routing.",
+    assumptions: ["Pain is real", "Willingness to pay", "Adoption feasibility", "Integration need"],
+  },
+  {
+    id: 1,
+    name: "MoodMenu",
+    tagline: "B2C / App",
+    desc: "Restaurant app that suggests dishes based on your mood. Core assumption: people feel decision fatigue when choosing what to eat.",
+    assumptions: ["Decision fatigue real", "Restaurant buy-in", "App stickiness", "Mood detection UX"],
+  },
+  {
+    id: 2,
+    name: "CliniTrack",
+    tagline: "B2B / Health",
+    desc: "Automated patient follow-up for private clinics. Core assumption: manual follow-up causes lost revenue for clinics.",
+    assumptions: ["Revenue loss proven", "GDPR compliance", "Clinic workflow fit", "Patient acceptance"],
+  }
+];
+
+const ACTIONS = [
+  {
+    id: "interviews",
+    name: "Customer interviews",
+    desc: "Talk to 10 potential users to validate the core pain.",
+    cost: { money: 2, time: 1 },
+    outcomes: [
+      { type: "good", title: "Strong signal", body: "7 of 10 confirmed the pain is acute and frequent. Two offered to pilot for free.", delta: 12, deltaLabel: "+12 traction" },
+      { type: "bad", title: "Weak signal", body: "Users have the pain, but say they've 'just learned to live with it.' Urgency is low.", delta: 4, deltaLabel: "+4 traction (low urgency)" },
+      { type: "neutral", title: "Mixed signal", body: "Pain exists but the workarounds they use are surprisingly good. Need sharper problem framing.", delta: 7, deltaLabel: "+7 traction" },
+    ],
+    weight: [0.45, 0.3, 0.25],
+    lesson: "Interviews are cheap signal — always start here, but probe for urgency not just existence of pain."
+  },
+  {
+    id: "smoke_test",
+    name: "Smoke test landing page",
+    desc: "Build a fake landing page and run $500 in ads to measure sign-up intent.",
+    cost: { money: 4, time: 1 },
+    outcomes: [
+      { type: "good", title: "High click-through", body: "3.2% conversion on 'Join waitlist'. Strong demand signal from your target segment.", delta: 14, deltaLabel: "+14 traction" },
+      { type: "bad", title: "Near-zero clicks", body: "0.3% CTR. Either the message misses, or the channel is wrong. Budget burned.", delta: 1, deltaLabel: "+1 traction (bad signal)" },
+      { type: "neutral", title: "Moderate interest", body: "1.1% CTR. There's something, but messaging or audience needs refinement.", delta: 7, deltaLabel: "+7 traction" },
+    ],
+    weight: [0.4, 0.3, 0.3],
+    lesson: "Smoke tests reveal whether your value proposition resonates — not just whether the pain exists."
+  },
+  {
+    id: "wizard_of_oz",
+    name: "Wizard of Oz MVP",
+    desc: "Manually do the service behind a polished UI. No real product built.",
+    cost: { money: 6, time: 2 },
+    outcomes: [
+      { type: "good", title: "Users loved it", body: "Pilot users didn't notice it was manual. NPS of 72. Three asked about pricing.", delta: 18, deltaLabel: "+18 traction" },
+      { type: "bad", title: "Users noticed", body: "Delays exposed the manual process. Trust damaged — users need speed.", delta: 3, deltaLabel: "+3 traction (trust issue)" },
+      { type: "neutral", title: "Useful but clunky", body: "Users found value but flagged friction. Tells you what the real product needs to nail.", delta: 10, deltaLabel: "+10 traction" },
+    ],
+    weight: [0.4, 0.2, 0.4],
+    lesson: "Wizard of Oz tests desirability of the outcome before building the engine — powerful if done with care."
+  },
+  {
+    id: "prototype",
+    name: "Clickable prototype",
+    desc: "Build a Figma or lightweight prototype. Run 5 usability sessions.",
+    cost: { money: 5, time: 2 },
+    outcomes: [
+      { type: "good", title: "Intuitive flow", body: "Users completed core tasks with minimal guidance. Clear path to building the real thing.", delta: 15, deltaLabel: "+15 traction" },
+      { type: "bad", title: "Confusing UX", body: "Users couldn't find key features. Core workflow needs a rethink before build.", delta: 2, deltaLabel: "+2 traction (UX pivot needed)" },
+      { type: "neutral", title: "Some friction", body: "Core loop works, but onboarding is confusing. A focused fix would unlock the value.", delta: 9, deltaLabel: "+9 traction" },
+    ],
+    weight: [0.45, 0.2, 0.35],
+    lesson: "Prototypes de-risk the UI/UX layer. Great at identifying friction before a line of real code is written."
+  },
+  {
+    id: "presell",
+    name: "Pre-sell to 3 customers",
+    desc: "Ask for real money (or LOI) before the product exists.",
+    cost: { money: 1, time: 2 },
+    outcomes: [
+      { type: "good", title: "Letter of intent signed", body: "One company signed an LOI for $800/mo pending delivery. The problem is real and urgent.", delta: 22, deltaLabel: "+22 traction (commitment = conviction)" },
+      { type: "bad", title: "Polite declines only", body: "'Love the idea, but we'd need to see the product first.' No commitment, no signal.", delta: 2, deltaLabel: "+2 traction (no conviction)" },
+      { type: "neutral", title: "Strong interest, no commitment", body: "Enthusiastic conversations but no signatures. Common — go narrow and push harder.", delta: 8, deltaLabel: "+8 traction" },
+    ],
+    weight: [0.3, 0.4, 0.3],
+    lesson: "Pre-selling is the ultimate test: customers vote with money. Polite enthusiasm is not validation."
+  },
+  {
+    id: "pivot",
+    name: "Pivot assumption",
+    desc: "Drop a failing assumption. Re-target a specific niche.",
+    cost: { money: 3, time: 2 },
+    outcomes: [
+      { type: "good", title: "Niche unlocked", body: "Narrowing to refrigerated-truck routes revealed a much more acute pain. Sharp focus works.", delta: 16, deltaLabel: "+16 traction (focus premium)" },
+      { type: "bad", title: "Wrong pivot", body: "New niche has the same low urgency. More data needed before another pivot.", delta: 1, deltaLabel: "+1 traction" },
+      { type: "neutral", title: "Promising direction", body: "New segment looks better on first pass. One more interview round will confirm.", delta: 8, deltaLabel: "+8 traction" },
+    ],
+    weight: [0.35, 0.25, 0.4],
+    lesson: "Pivoting an assumption (not the whole idea) is a power move — but only when data drives it, not desperation."
+  }
+];
+
+const TWISTS = [
+  { body: "A well-funded competitor just announced a similar product.", effect: "Effect: traction growth halved next round.", fn: s => { s.twistedRound = s.round + 1; } },
+  { body: "You landed a feature in a popular newsletter. Free PR.", effect: "Effect: +8 traction boost.", fn: s => { s.traction = Math.min(100, s.traction + 8); } },
+  { body: "Your lead interviewee turned out to be an outlier. Their problem is unique.", effect: "Effect: -6 traction (overestimated signal).", fn: s => { s.traction = Math.max(0, s.traction - 6); } },
+  { body: "A design agency offered a pro bono prototype sprint this week.", effect: "Effect: next prototype action costs 0 weeks.", fn: s => { s.freeSprint = true; } },
+  { body: "Budget cut: founder had to return investor capital for compliance.", effect: "Effect: -$6k budget.", fn: s => { s.money = Math.max(0, s.money - 6); } },
+  { body: "Target market is in a regulatory freeze. No purchasing decisions possible.", effect: "Effect: presell action traction halved next round.", fn: s => { s.regulatoryFreeze = true; } },
+];
+
+let G = {};
+let selectedIdea = 0;
+
+function selectIdea(id) {
+  selectedIdea = id;
+  document.querySelectorAll('.idea-option').forEach(el => el.classList.remove('selected'));
+  document.querySelector('.idea-option[data-id="' + id + '"]').classList.add('selected');
+}
+
+function startGame() {
+  const idea = IDEAS[selectedIdea];
+  G = {
+    idea,
+    money: 40,
+    time: 8,
+    traction: 0,
+    round: 1,
+    maxRounds: 6,
+    log: [],
+    assumptionState: idea.assumptions.map(() => 'unvalidated'),
+    twistedRound: -1,
+    freeSprint: false,
+    regulatoryFreeze: false,
+  };
+  showScreen('screen-game');
+  renderGame();
+  showEventPanel(false);
+  showTwist(false);
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function renderGame() {
+  document.getElementById('hdr-idea-name').textContent = G.idea.name.toUpperCase();
+  document.getElementById('hdr-money').textContent = '$' + G.money + 'k';
+  document.getElementById('hdr-time').textContent = G.time;
+  document.getElementById('traction-score-label').textContent = G.traction + ' / 80';
+  document.getElementById('traction-fill').style.width = Math.min(100, G.traction) + '%';
+  document.getElementById('idea-card-name').textContent = G.idea.name;
+  document.getElementById('idea-card-desc').textContent = G.idea.desc;
+  document.getElementById('round-label').textContent = 'Round ' + G.round + ' of ' + G.maxRounds + ' — choose your next validation action';
+
+  const tagsEl = document.getElementById('assumption-tags');
+  tagsEl.innerHTML = G.idea.assumptions.map((a, i) =>
+    '<div class="tag ' + G.assumptionState[i] + '">' + a + '</div>'
+  ).join('');
+
+  renderActions();
+  renderLog();
+}
+
+function renderActions() {
+  const grid = document.getElementById('action-grid');
+  const shuffled = shuffle([...ACTIONS]).slice(0, 4);
+  grid.innerHTML = shuffled.map(a => {
+    const canAfford = G.money >= a.cost.money && G.time >= a.cost.time;
+    const timeCost = (G.freeSprint && a.id === 'prototype') ? 0 : a.cost.time;
+    return '<div class="action-card ' + (canAfford ? '' : 'disabled') + '" onclick="' + (canAfford ? 'doAction(\'' + a.id + '\')' : '') + '">' +
+      '<div class="action-name">' + a.name + '</div>' +
+      '<div class="action-desc">' + a.desc + '</div>' +
+      '<div class="action-costs">' +
+        '<div class="cost-badge cost-money">-$' + a.cost.money + 'k</div>' +
+        '<div class="cost-badge cost-time">-' + timeCost + 'w</div>' +
+      '</div></div>';
+  }).join('');
+}
+
+function doAction(actionId) {
+  const a = ACTIONS.find(x => x.id === actionId);
+  const timeCost = (G.freeSprint && actionId === 'prototype') ? 0 : a.cost.time;
+  G.money -= a.cost.money;
+  G.time -= timeCost;
+  G.freeSprint = false;
+
+  const roll = Math.random();
+  let cumulative = 0;
+  let outcome;
+  for (let i = 0; i < a.outcomes.length; i++) {
+    cumulative += a.weight[i];
+    if (roll <= cumulative) { outcome = a.outcomes[i]; break; }
+  }
+  if (!outcome) outcome = a.outcomes[a.outcomes.length - 1];
+
+  let delta = outcome.delta;
+  if (G.round === G.twistedRound) delta = Math.floor(delta / 2);
+  if (G.regulatoryFreeze && actionId === 'presell') delta = Math.floor(delta / 2);
+  G.regulatoryFreeze = false;
+
+  G.traction = Math.min(100, G.traction + delta);
+
+  const unvalidated = G.assumptionState.findIndex(s => s === 'unvalidated');
+  if (unvalidated !== -1) {
+    G.assumptionState[unvalidated] = outcome.type === 'good' ? 'validated' : (outcome.type === 'bad' ? 'failed' : 'validated');
+  }
+
+  G.log.unshift({ round: G.round, action: a.name, outcome: outcome.title, delta });
+
+  showEventPanel(true, outcome, delta);
+
+  const twistRoll = Math.random();
+  if (twistRoll < 0.30 && G.round < G.maxRounds) {
+    const twist = TWISTS[Math.floor(Math.random() * TWISTS.length)];
+    twist.fn(G);
+    showTwist(true, twist);
+  } else {
+    showTwist(false);
+  }
+
+  G.round++;
+  renderGame();
+
+  if (G.traction >= 80) { setTimeout(endGame, 1200); return; }
+  if (G.money <= 0 || G.time <= 0 || G.round > G.maxRounds) { setTimeout(endGame, 1200); return; }
+}
+
+function showEventPanel(show, outcome, delta) {
+  const panel = document.getElementById('event-panel');
+  if (!show) { panel.classList.remove('show'); return; }
+  panel.classList.add('show');
+  const icon = document.getElementById('event-icon');
+  icon.className = 'event-icon ' + outcome.type;
+  icon.textContent = outcome.type === 'good' ? '✓' : (outcome.type === 'bad' ? '✕' : '~');
+  document.getElementById('event-title').textContent = outcome.title;
+  document.getElementById('event-body').textContent = outcome.body;
+  document.getElementById('event-delta').innerHTML = '<span class="' + (delta >= 10 ? 'delta-pos' : 'delta-neg') + '">' + (delta >= 0 ? '+' : '') + delta + ' traction</span>';
+}
+
+function showTwist(show, twist) {
+  const el = document.getElementById('twist-overlay');
+  if (!show) { el.classList.remove('show'); return; }
+  el.classList.add('show');
+  document.getElementById('twist-body').textContent = twist.body;
+  document.getElementById('twist-effect').textContent = twist.effect;
+}
+
+function renderLog() {
+  const el = document.getElementById('log-list');
+  if (G.log.length === 0) { el.innerHTML = '<div class="log-entry" style="color:var(--muted)">No actions yet.</div>'; return; }
+  el.innerHTML = G.log.slice(0, 6).map(e =>
+    '<div class="log-entry">R' + e.round + ' <span>' + e.action + '</span> → ' + e.outcome + ' <span style="color:' + (e.delta >= 10 ? 'var(--accent)' : 'var(--danger)') + '">' + (e.delta >= 0 ? '+' : '') + e.delta + '</span></div>'
+  ).join('');
+}
+
+function endGame() {
+  const won = G.traction >= 80;
+  document.getElementById('end-title').textContent = won ? 'FUNDED.' : 'BACK TO THE DRAWING BOARD.';
+  document.getElementById('end-subtitle').textContent = won
+    ? 'You reached product-market fit with $' + G.money + 'k and ' + G.time + ' week(s) left. Investors are calling.'
+    : 'You ran out of ' + (G.money <= 0 ? 'budget' : G.time <= 0 ? 'runway' : 'rounds') + ' with ' + G.traction + ' traction — ' + (80 - G.traction) + ' short of target. That\'s valuable data.';
+
+  document.getElementById('stat-traction').textContent = G.traction;
+  document.getElementById('stat-traction').style.color = G.traction >= 80 ? 'var(--accent)' : 'var(--danger)';
+  document.getElementById('stat-money').textContent = '$' + G.money + 'k';
+  document.getElementById('stat-rounds').textContent = G.round - 1;
+
+  const lessons = buildLessons();
+  document.getElementById('lessons-list').innerHTML = lessons.map(l => '<div class="lesson-item">' + l + '</div>').join('');
+
+  showScreen('screen-end');
+}
+
+function buildLessons() {
+  const lessons = [];
+  if (G.traction < 80) {
+    if (G.money <= 0) lessons.push("You ran out of budget — cheap experiments (interviews, smoke tests) should come before expensive builds.");
+    if (G.time <= 0) lessons.push("Runway disappeared before you had conviction — speed of learning matters as much as depth.");
+    if (G.traction < 40) lessons.push("Low traction often means testing the wrong assumption — identify your riskiest bet first.");
+  }
+  if (G.log.some(e => e.action === 'Pre-sell to 3 customers' && e.delta < 8)) {
+    lessons.push("Pre-selling too early (before validating pain) burns goodwill. Sequence matters.");
+  }
+  if (G.log.some(e => e.action === 'Customer interviews')) {
+    lessons.push("Interviews are your cheapest validation tool — use them to sharpen every subsequent experiment.");
+  }
+  lessons.push("Product-market fit isn't found once — it's refined through iteration. Each round of feedback narrows the target.");
+  lessons.push("Failing fast is a strategy, not an accident. The goal is learning per dollar spent, not survival per round.");
+  return lessons.slice(0, 4);
+}
+
+function restartGame() { showScreen('screen-intro'); }
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+</script>
+</body>
+</html>
